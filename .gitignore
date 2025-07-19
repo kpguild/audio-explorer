@@ -25,3 +25,4 @@ vite.config.ts.timestamp-*
 # Instance-specific directories.
 static/maps
 static/sounds
+static/maps.json

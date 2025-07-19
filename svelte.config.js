@@ -1,3 +1,6 @@
+// Copyright 2025 The Kuloran Players.
+// SPDX-License-Identifier: 	AGPL-3.0-or-later
+
 import adapter from '@sveltejs/adapter-static';
 import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
 
