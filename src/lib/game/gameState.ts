@@ -39,6 +39,7 @@ export class GameState {
     // Story Tracking
     public stories: Story[];
     public currentStory: Writable<Story | null> = writable(null);
+    private previousStory: Story | null = null;
 
     // Ambience Tracking
     public ambiences: Ambience[];
@@ -283,8 +284,11 @@ export class GameState {
     }
 
     private updateStory(x: number, y: number): void {
-        const story = this.getStoryAt(x, y);
-        this.currentStory.set(story || null);
+        const newStory = this.getStoryAt(x, y) || null;
+        if (newStory !== this.previousStory) {
+            this.currentStory.set(newStory);
+            this.previousStory = newStory;
+        }
     }
 
     private updateAmbiences(x: number, y: number): void {
