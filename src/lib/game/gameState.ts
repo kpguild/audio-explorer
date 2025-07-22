@@ -85,6 +85,16 @@ export class GameState {
         return undefined;
     }
 
+    public getUniquePlatformTypes(): string[] {
+        const platformTypes = new Set<string>();
+        for (const platform of this.mapData.platforms) {
+            if (platform.type !== "unknown") {
+                platformTypes.add(platform.type);
+            }
+        }
+        return Array.from(platformTypes);
+    }
+
     public startMovement(direction: MovementDirection) {
         if (this.activeDirections.has(direction)) return;
         this.activeDirections.add(direction);

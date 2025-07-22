@@ -31,6 +31,26 @@
     let volumeDialogOpen = false;
     let musicVolume = 50;
     let ambienceVolume = 85;
+    let isLoading = true;
+
+    let audioContext: AudioContext;
+    const footstepBuffers: Record<string, AudioBuffer> = {};
+
+    const preloadFootstep = async (type: string) => {
+        if (!audioContext || !type || type === "unknown") return;
+        if (footstepBuffers[type]) return;
+        try {
+            const response = await fetch(`/sounds/${type}.ogg`);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            const arrayBuffer = await response.arrayBuffer();
+            const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+            footstepBuffers[type] = audioBuffer;
+        } catch (e) {
+            console.warn(`Could not load footstep sound ${type}.ogg:`, e);
+        }
+    };
 
     const speak = (text: string, assertive = true) => {
         if (!liveRegion) return;
@@ -42,13 +62,17 @@
     };
 
     const playSound = (type: string) => {
-        if (!type || type === "unknown") return;
+        if (!type || type === "unknown" || !footstepBuffers[type]) return;
         try {
-            const audio = new Audio(`/sounds/${type}.ogg`);
-            audio.volume = 0.3;
-            audio.play().catch(console.warn);
+            const source = audioContext.createBufferSource();
+            source.buffer = footstepBuffers[type];
+            const gainNode = audioContext.createGain();
+            gainNode.gain.value = 0.3;
+            source.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            source.start();
         } catch (e) {
-            console.warn(`Could not create audio for ${type}.ogg:`, e);
+            console.warn(`Could not play audio for ${type}.ogg:`, e);
         }
     };
 
@@ -120,7 +144,7 @@
         if (ambience.audioElement) return;
         try {
             ambience.audioElement = new Audio(`/sounds/${ambience.sound}`);
-            ambience.audioElement.preload = "auto";
+            ambience.audioElement.preload = "metadata";
             ambience.audioElement.loop = true;
         } catch (e) {
             console.warn(
@@ -210,34 +234,54 @@
     });
 
     onMount(() => {
-        lastAnnouncedZone = $currentZoneText;
+        const init = async () => {
+            // Can't do async in onMount directly
+            audioContext = new window.AudioContext();
+            lastAnnouncedZone = $currentZoneText;
 
-        gameStateObject.ambiences.forEach((ambience) => {
-            preloadAmbience(ambience);
-            if (
-                gameStateObject.isInsideAmbience(
-                    $playerPosition.x,
-                    $playerPosition.y,
-                    ambience
-                )
-            ) {
-                handleAmbienceEnter(ambience);
-            }
-        });
+            const uniquePlatformTypes =
+                gameStateObject.getUniquePlatformTypes();
+            const footstepPromises = uniquePlatformTypes.map(preloadFootstep);
 
-        gameStateObject.onFootstep((platformType) => {
-            if (typeof window !== "undefined") {
-                playSound(platformType);
-            }
-        });
+            const ambiencePromises = gameStateObject.ambiences.map((ambience) =>
+                preloadAmbience(ambience)
+            );
 
-        gameStateObject.onAmbienceEnter(handleAmbienceEnter);
-        gameStateObject.onAmbienceExit(handleAmbienceExit);
+            await Promise.all([...footstepPromises, ...ambiencePromises]);
+
+            isLoading = false;
+
+            gameStateObject.ambiences.forEach((ambience) => {
+                if (
+                    gameStateObject.isInsideAmbience(
+                        $playerPosition.x,
+                        $playerPosition.y,
+                        ambience
+                    )
+                ) {
+                    handleAmbienceEnter(ambience);
+                }
+            });
+
+            gameStateObject.onFootstep((platformType) => {
+                if (typeof window !== "undefined") {
+                    playSound(platformType);
+                }
+            });
+
+            gameStateObject.onAmbienceEnter(handleAmbienceEnter);
+            gameStateObject.onAmbienceExit(handleAmbienceExit);
+        };
+
+        init();
 
         return () => {
             gameStateObject.offAmbienceEnter(handleAmbienceEnter);
             gameStateObject.offAmbienceExit(handleAmbienceExit);
             gameStateObject.ambiences.forEach(handleAmbienceExit);
+            if (audioContext) {
+                audioContext.close();
+            }
         };
     });
 </script>
@@ -255,26 +299,37 @@
     class="visually-hidden"
 ></div>
 
-<div class="container d-flex flex-column flex-grow-1">
-    <Header {mapName} />
+{#if isLoading}
+    <div
+        class="container d-flex flex-column flex-grow-1 justify-content-center align-items-center"
+    >
+        <p>Loading...</p>
+    </div>
+{:else}
+    <div class="container d-flex flex-column flex-grow-1">
+        <Header {mapName} />
 
-    <main class="d-flex flex-column justify-content-center flex-grow-1">
-        <Controls on:start={handleMovementStart} on:stop={handleMovementStop} />
+        <main class="d-flex flex-column justify-content-center flex-grow-1">
+            <Controls
+                on:start={handleMovementStart}
+                on:stop={handleMovementStop}
+            />
 
-        <ActionButtons
-            on:announceZone={handleAnnounceZone}
-            on:announceCoords={handleAnnounceCoords}
-            on:openPoiDialog={handleOpenPoiDialog}
-            on:announceDirection={handleAnnounceDirection}
-            on:openVolumeDialog={handleOpenVolumeDialog}
-        />
+            <ActionButtons
+                on:announceZone={handleAnnounceZone}
+                on:announceCoords={handleAnnounceCoords}
+                on:openPoiDialog={handleOpenPoiDialog}
+                on:announceDirection={handleAnnounceDirection}
+                on:openVolumeDialog={handleOpenVolumeDialog}
+            />
 
-        <StatusDisplay
-            zoneText={$currentZoneText}
-            playerPosition={$playerPosition}
-        />
-    </main>
-</div>
+            <StatusDisplay
+                zoneText={$currentZoneText}
+                playerPosition={$playerPosition}
+            />
+        </main>
+    </div>
+{/if}
 
 <PoiDialog {pois} bind:open={poiDialogOpen} on:track={handleTrackPoi} />
 
