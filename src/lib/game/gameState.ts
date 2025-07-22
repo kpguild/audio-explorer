@@ -46,7 +46,9 @@ export class GameState {
             this.getZoneAt(initialPosition.x, initialPosition.y)?.text ||
                 "Uncharted territory"
         );
-        const initialPlatformType = this.getPlatformAt(initialPosition.x, initialPosition.y)?.type || "unknown";
+        const initialPlatformType =
+            this.getPlatformAt(initialPosition.x, initialPosition.y)?.type ||
+            "unknown";
         this.currentPlatformType = writable(initialPlatformType);
     }
 
@@ -235,6 +237,6 @@ export class GameState {
     }
 
     private emitFootstep(platformType: string): void {
-        this.footstepListeners.forEach(callback => callback(platformType));
+        this.footstepListeners.forEach((callback) => callback(platformType));
     }
 }
