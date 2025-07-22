@@ -9,12 +9,14 @@
     import GraphUp from "svelte-bootstrap-icons/lib/GraphUp.svelte";
     import Map from "svelte-bootstrap-icons/lib/Map.svelte";
     import Compass from "svelte-bootstrap-icons/lib/Compass.svelte";
+    import VolumeUp from "svelte-bootstrap-icons/lib/VolumeUp.svelte";
 
     const dispatch = createEventDispatcher<{
         announceZone: void;
         announceCoords: void;
         openPoiDialog: void;
         announceDirection: void;
+        openVolumeDialog: void;
     }>();
 </script>
 
@@ -42,5 +44,10 @@
         class="btn btn-info"
         on:click={() => dispatch("announceDirection")}
         aria-label="Announce current direction"><Compass /> Direction</button
+    >
+    <button
+        class="btn btn-info"
+        on:click={() => dispatch("openVolumeDialog")}
+        aria-label="Audio volume"><VolumeUp /> Volume</button
     >
 </div>

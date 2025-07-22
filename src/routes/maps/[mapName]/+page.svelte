@@ -6,13 +6,14 @@
 <script lang="ts">
     import { onMount } from "svelte";
     import type { PageData } from "./$types";
-    import type { MovementDirection, POI } from "$lib/game/types";
+    import type { MovementDirection, POI, Ambience } from "$lib/game/types";
 
     import Header from "$lib/components/header.svelte";
     import Controls from "$lib/components/controls.svelte";
     import ActionButtons from "$lib/components/actionButtons.svelte";
     import StatusDisplay from "$lib/components/statusDisplay.svelte";
     import PoiDialog from "$lib/components/poiDialog.svelte";
+    import AudioVolumesDialog from "$lib/components/audioVolumesDialog.svelte";
 
     export let data: PageData;
     const { mapName, gameState: gameStateObject } = data;
@@ -27,6 +28,9 @@
     let liveRegion: HTMLElement;
     let lastAnnouncedZone = "";
     let poiDialogOpen = false;
+    let volumeDialogOpen = false;
+    let musicVolume = 50;
+    let ambienceVolume = 85;
 
     const speak = (text: string, assertive = true) => {
         if (!liveRegion) return;
@@ -48,6 +52,51 @@
         }
     };
 
+    const calculateAmbienceVolume = (ambience: Ambience) => {
+        const baseVolumePercent = Math.max(
+            0,
+            Math.min(1, (ambience.volume + 100) / 100)
+        );
+        const isMusicTrack =
+            ambience.sound.startsWith("loop_music") ||
+            ambience.sound.startsWith("music");
+        const masterVolumePercent = isMusicTrack
+            ? musicVolume / 100
+            : ambienceVolume / 100;
+        return baseVolumePercent * masterVolumePercent;
+    };
+
+    const handleAmbienceEnter = (ambience: Ambience) => {
+        try {
+            if (!ambience.audioElement) {
+                ambience.audioElement = new Audio(`/sounds/${ambience.sound}`);
+                ambience.audioElement.loop = true;
+            }
+
+            ambience.audioElement.volume = calculateAmbienceVolume(ambience);
+            ambience.audioElement.playbackRate = ambience.pitch / 100;
+            ambience.audioElement.play().catch(console.warn);
+        } catch (e) {
+            console.warn(
+                `Could not handle ambience enter for ${ambience.sound}: `,
+                e
+            );
+        }
+    };
+
+    const handleAmbienceExit = (ambience: Ambience) => {
+        try {
+            if (ambience.audioElement) {
+                ambience.audioElement.pause();
+            }
+        } catch (e) {
+            console.warn(
+                `Could not handle ambience exit for ${ambience.sound}:`,
+                e
+            );
+        }
+    };
+
     // Event Handlers:
     const handleMovementStart = (e: CustomEvent<MovementDirection>) =>
         gameStateObject.startMovement(e.detail);
@@ -63,17 +112,53 @@
         poiDialogOpen = true;
     };
 
-    const handleKeyDown = (e: KeyboardEvent) => {
-        const keyMap: Record<string, MovementDirection> = {
-            ArrowUp: "up",
-            ArrowDown: "down",
-            ArrowLeft: "left",
-            ArrowRight: "right",
-        };
+    const handleOpenVolumeDialog = () => {
+        volumeDialogOpen = true;
+    };
 
-        if (keyMap[e.key]) {
+    const preloadAmbience = (ambience: Ambience) => {
+        if (ambience.audioElement) return;
+        try {
+            ambience.audioElement = new Audio(`/sounds/${ambience.sound}`);
+            ambience.audioElement.preload = "auto";
+            ambience.audioElement.loop = true;
+        } catch (e) {
+            console.warn(
+                `Could not preload ambience for ${ambience.sound}: `,
+                e
+            );
+        }
+    };
+
+    // To update ambience volumes when sliders change
+    $: if (musicVolume !== undefined || ambienceVolume !== undefined) {
+        updateCurrentAmbienceVolumes();
+    }
+
+    const updateCurrentAmbienceVolumes = () => {
+        gameStateObject.ambiences.forEach((ambience: Ambience) => {
+            if (ambience.audioElement && !ambience.audioElement.paused) {
+                ambience.audioElement.volume =
+                    calculateAmbienceVolume(ambience);
+            }
+        });
+    };
+
+    const movementKeyMap: Record<string, MovementDirection> = {
+        ArrowUp: "up",
+        ArrowDown: "down",
+        ArrowLeft: "left",
+        ArrowRight: "right",
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+        if (poiDialogOpen || volumeDialogOpen || e.altKey || e.metaKey) {
+            return;
+        }
+
+        if (movementKeyMap[e.key]) {
             e.preventDefault();
-            gameStateObject.startMovement(keyMap[e.key]);
+            gameStateObject.startMovement(movementKeyMap[e.key]);
         } else {
             const key = e.key.toLowerCase();
             if (key === "b") {
@@ -88,6 +173,9 @@
             } else if (key === "y") {
                 e.preventDefault();
                 handleAnnounceDirection();
+            } else if (key === "v" && e.shiftKey) {
+                e.preventDefault();
+                handleOpenVolumeDialog();
             }
         }
     };
@@ -105,15 +193,11 @@
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
-        const keyMap: Record<string, MovementDirection> = {
-            ArrowUp: "up",
-            ArrowDown: "down",
-            ArrowLeft: "left",
-            ArrowRight: "right",
-        };
-        if (keyMap[e.key]) {
-            e.preventDefault();
-            gameStateObject.stopMovement(keyMap[e.key]);
+        if (movementKeyMap[e.key]) {
+            if (!poiDialogOpen && !volumeDialogOpen) {
+                e.preventDefault();
+            }
+            gameStateObject.stopMovement(movementKeyMap[e.key]);
         }
     };
 
@@ -128,11 +212,33 @@
     onMount(() => {
         lastAnnouncedZone = $currentZoneText;
 
+        gameStateObject.ambiences.forEach((ambience) => {
+            preloadAmbience(ambience);
+            if (
+                gameStateObject.isInsideAmbience(
+                    $playerPosition.x,
+                    $playerPosition.y,
+                    ambience
+                )
+            ) {
+                handleAmbienceEnter(ambience);
+            }
+        });
+
         gameStateObject.onFootstep((platformType) => {
             if (typeof window !== "undefined") {
                 playSound(platformType);
             }
         });
+
+        gameStateObject.onAmbienceEnter(handleAmbienceEnter);
+        gameStateObject.onAmbienceExit(handleAmbienceExit);
+
+        return () => {
+            gameStateObject.offAmbienceEnter(handleAmbienceEnter);
+            gameStateObject.offAmbienceExit(handleAmbienceExit);
+            gameStateObject.ambiences.forEach(handleAmbienceExit);
+        };
     });
 </script>
 
@@ -160,6 +266,7 @@
             on:announceCoords={handleAnnounceCoords}
             on:openPoiDialog={handleOpenPoiDialog}
             on:announceDirection={handleAnnounceDirection}
+            on:openVolumeDialog={handleOpenVolumeDialog}
         />
 
         <StatusDisplay
@@ -170,3 +277,9 @@
 </div>
 
 <PoiDialog {pois} bind:open={poiDialogOpen} on:track={handleTrackPoi} />
+
+<AudioVolumesDialog
+    bind:open={volumeDialogOpen}
+    bind:musicVolume
+    bind:ambienceVolume
+/>

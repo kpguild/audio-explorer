@@ -20,6 +20,14 @@ export interface POI extends MapRect {
     text: string;
 }
 
+export interface Ambience extends MapRect {
+    sound: string;
+    volume: number;
+    pitch: number;
+    exclusions: MapRect[];
+    audioElement: HTMLAudioElement | null;
+}
+
 export interface PlayerPosition {
     x: number;
     y: number;

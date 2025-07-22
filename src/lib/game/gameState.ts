@@ -8,9 +8,11 @@ import type {
     Zone,
     POI,
     MovementDirection,
+    Ambience,
 } from "./types";
 import { parseMapData, type ParsedMapData } from "./parser";
 
+// This class is pretty ridgid, but it's probably fine. We're not building a full game engine here.
 export class GameState {
     // Static Data
     private mapData: ParsedMapData;
@@ -33,12 +35,20 @@ export class GameState {
     public pois: POI[];
     public trackingPOI: Writable<POI | null> = writable(null);
 
+    // Ambience Tracking
+    public ambiences: Ambience[];
+    public currentAmbiences: Writable<Ambience[]> = writable([]);
+    private previousAmbiences: Set<Ambience> = new Set();
+
     private footstepListeners: ((platformType: string) => void)[] = [];
+    private ambienceEnterListeners: ((ambience: Ambience) => void)[] = [];
+    private ambienceExitListeners: ((ambience: Ambience) => void)[] = [];
 
     constructor(mapName: string, rawData: string) {
         this.mapName = mapName;
         this.mapData = parseMapData(rawData);
         this.pois = this.mapData.pois;
+        this.ambiences = this.mapData.ambiences;
 
         const initialPosition = { ...this.mapData.spawn };
         this.playerPosition = writable(initialPosition);
@@ -49,7 +59,9 @@ export class GameState {
         const initialPlatformType =
             this.getPlatformAt(initialPosition.x, initialPosition.y)?.type ||
             "unknown";
+
         this.currentPlatformType = writable(initialPlatformType);
+        this.updateAmbiences(initialPosition.x, initialPosition.y);
     }
 
     private getPlatformAt(x: number, y: number): Platform | undefined {
@@ -183,6 +195,8 @@ export class GameState {
 
                 const zone = this.getZoneAt(newX, newY);
                 this.currentZoneText.set(zone?.text || "Uncharted territory");
+
+                this.updateAmbiences(newX, newY);
             }
 
             return { x: newX, y: newY };
@@ -238,5 +252,89 @@ export class GameState {
 
     private emitFootstep(platformType: string): void {
         this.footstepListeners.forEach((callback) => callback(platformType));
+    }
+
+    private updateAmbiences(x: number, y: number): void {
+        const currentAmbiences = new Set<Ambience>();
+
+        for (const ambience of this.ambiences) {
+            if (this.isInsideAmbience(x, y, ambience)) {
+                currentAmbiences.add(ambience);
+            }
+        }
+
+        // Find newly entered ambiences
+        for (const ambience of currentAmbiences) {
+            if (!this.previousAmbiences.has(ambience)) {
+                this.emitAmbienceEnter(ambience);
+            }
+        }
+
+        // Find exited ambiences
+        for (const ambience of this.previousAmbiences) {
+            if (!currentAmbiences.has(ambience)) {
+                this.emitAmbienceExit(ambience);
+            }
+        }
+
+        // Update state
+        this.previousAmbiences = currentAmbiences;
+        this.currentAmbiences.set(Array.from(currentAmbiences));
+    }
+
+    public isInsideAmbience(x: number, y: number, ambience: Ambience): boolean {
+        // Check if player is within ambience bounds
+        if (
+            x < ambience.minX ||
+            x > ambience.maxX ||
+            y < ambience.minY ||
+            y > ambience.maxY
+        ) {
+            return false;
+        }
+
+        // Check if player is within any exclusion zones
+        for (const exclusion of ambience.exclusions) {
+            if (
+                x >= exclusion.minX &&
+                x <= exclusion.maxX &&
+                y >= exclusion.minY &&
+                y <= exclusion.maxY
+            ) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    public onAmbienceEnter(callback: (ambience: Ambience) => void): void {
+        this.ambienceEnterListeners.push(callback);
+    }
+
+    public offAmbienceEnter(callback: (ambience: Ambience) => void): void {
+        const index = this.ambienceEnterListeners.indexOf(callback);
+        if (index > -1) {
+            this.ambienceEnterListeners.splice(index, 1);
+        }
+    }
+
+    public onAmbienceExit(callback: (ambience: Ambience) => void): void {
+        this.ambienceExitListeners.push(callback);
+    }
+
+    public offAmbienceExit(callback: (ambience: Ambience) => void): void {
+        const index = this.ambienceExitListeners.indexOf(callback);
+        if (index > -1) {
+            this.ambienceExitListeners.splice(index, 1);
+        }
+    }
+
+    private emitAmbienceEnter(ambience: Ambience): void {
+        this.ambienceEnterListeners.forEach((callback) => callback(ambience));
+    }
+
+    private emitAmbienceExit(ambience: Ambience): void {
+        this.ambienceExitListeners.forEach((callback) => callback(ambience));
     }
 }
