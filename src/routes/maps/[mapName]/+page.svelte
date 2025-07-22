@@ -140,20 +140,6 @@
         volumeDialogOpen = true;
     };
 
-    const preloadAmbience = (ambience: Ambience) => {
-        if (ambience.audioElement) return;
-        try {
-            ambience.audioElement = new Audio(`/sounds/${ambience.sound}`);
-            ambience.audioElement.preload = "metadata";
-            ambience.audioElement.loop = true;
-        } catch (e) {
-            console.warn(
-                `Could not preload ambience for ${ambience.sound}: `,
-                e
-            );
-        }
-    };
-
     // To update ambience volumes when sliders change
     $: if (musicVolume !== undefined || ambienceVolume !== undefined) {
         updateCurrentAmbienceVolumes();
@@ -243,11 +229,7 @@
                 gameStateObject.getUniquePlatformTypes();
             const footstepPromises = uniquePlatformTypes.map(preloadFootstep);
 
-            const ambiencePromises = gameStateObject.ambiences.map((ambience) =>
-                preloadAmbience(ambience)
-            );
-
-            await Promise.all([...footstepPromises, ...ambiencePromises]);
+            await Promise.all([...footstepPromises]);
 
             isLoading = false;
 
