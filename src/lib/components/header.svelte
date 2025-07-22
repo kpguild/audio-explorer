@@ -7,8 +7,8 @@
     <div class="card bg-body-tertiary p-3 mx-auto">
         <small class="text-body-secondary">
             <strong>Controls:</strong> Arrow keys for movement. 'B' for zone, 'C'
-            for coordinates, 'T' for points of interest, and 'Y' for direction. Touch
-            controls are also available.
+            for coordinates, 'T' for points of interest, 'Y' for direction, 'E' for
+            extra content, and 'Shift+V' for volume. Touch controls are also available.
         </small>
         <p class="mt-2">
             <strong>Note:</strong> If you are using a screen reader on desktop, you

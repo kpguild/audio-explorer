@@ -8,6 +8,7 @@ import type {
     PlayerPosition,
     Ambience,
     MapRect,
+    Story,
 } from "./types";
 
 export interface ParsedMapData {
@@ -17,6 +18,7 @@ export interface ParsedMapData {
     zones: Zone[];
     pois: POI[];
     ambiences: Ambience[];
+    stories: Story[];
     spawn: PlayerPosition;
 }
 
@@ -29,6 +31,7 @@ export function parseMapData(rawData: string): ParsedMapData {
         zones: [],
         pois: [],
         ambiences: [],
+        stories: [],
         spawn: { x: 0, y: 0 },
     };
 
@@ -60,6 +63,24 @@ export function parseMapData(rawData: string): ParsedMapData {
             } else if (command === "spawn") {
                 data.spawn.x = parseInt(parts[1]);
                 data.spawn.y = parseInt(parts[2]);
+            } else if (command === "story") {
+                const [minX, maxX, minY, maxY] = parts.slice(1, 5).map(Number);
+                const storyname = parts[8];
+                data.stories.push({
+                    minX,
+                    maxX,
+                    minY,
+                    maxY,
+                    id: storyname,
+                    lines: [],
+                });
+            } else if (command === "storytext") {
+                const storyname = parts[1];
+                const text = parts.slice(2).join(" ");
+                const story = data.stories.find(s => s.id === storyname);
+                if (story) {
+                    story.lines.push(text);
+                }
             } else if (command === "ambience") {
                 const [minX, maxX, minY, maxY] = parts.slice(1, 5).map(Number);
                 const sound = parts[7];

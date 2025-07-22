@@ -9,6 +9,7 @@ import type {
     POI,
     MovementDirection,
     Ambience,
+    Story,
 } from "./types";
 import { parseMapData, type ParsedMapData } from "./parser";
 
@@ -35,6 +36,10 @@ export class GameState {
     public pois: POI[];
     public trackingPOI: Writable<POI | null> = writable(null);
 
+    // Story Tracking
+    public stories: Story[];
+    public currentStory: Writable<Story | null> = writable(null);
+
     // Ambience Tracking
     public ambiences: Ambience[];
     public currentAmbiences: Writable<Ambience[]> = writable([]);
@@ -49,6 +54,7 @@ export class GameState {
         this.mapData = parseMapData(rawData);
         this.pois = this.mapData.pois;
         this.ambiences = this.mapData.ambiences;
+        this.stories = this.mapData.stories;
 
         const initialPosition = { ...this.mapData.spawn };
         this.playerPosition = writable(initialPosition);
@@ -62,6 +68,7 @@ export class GameState {
 
         this.currentPlatformType = writable(initialPlatformType);
         this.updateAmbiences(initialPosition.x, initialPosition.y);
+        this.updateStory(initialPosition.x, initialPosition.y);
     }
 
     private getPlatformAt(x: number, y: number): Platform | undefined {
@@ -80,6 +87,16 @@ export class GameState {
             const z = this.mapData.zones[i];
             if (x >= z.minX && x <= z.maxX && y >= z.minY && y <= z.maxY) {
                 return z;
+            }
+        }
+        return undefined;
+    }
+
+    private getStoryAt(x: number, y: number): Story | undefined {
+        for (let i = this.mapData.stories.length - 1; i >= 0; i--) {
+            const s = this.mapData.stories[i];
+            if (x >= s.minX && x <= s.maxX && y >= s.minY && y <= s.maxY) {
+                return s;
             }
         }
         return undefined;
@@ -207,6 +224,7 @@ export class GameState {
                 this.currentZoneText.set(zone?.text || "Uncharted territory");
 
                 this.updateAmbiences(newX, newY);
+                this.updateStory(newX, newY);
             }
 
             return { x: newX, y: newY };
@@ -262,6 +280,11 @@ export class GameState {
 
     private emitFootstep(platformType: string): void {
         this.footstepListeners.forEach((callback) => callback(platformType));
+    }
+
+    private updateStory(x: number, y: number): void {
+        const story = this.getStoryAt(x, y);
+        this.currentStory.set(story || null);
     }
 
     private updateAmbiences(x: number, y: number): void {

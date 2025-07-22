@@ -28,6 +28,11 @@ export interface Ambience extends MapRect {
     audioElement: HTMLAudioElement | null;
 }
 
+export interface Story extends MapRect {
+    id: string;
+    lines: string[];
+}
+
 export interface PlayerPosition {
     x: number;
     y: number;

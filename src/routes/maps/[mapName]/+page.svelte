@@ -14,6 +14,7 @@
     import StatusDisplay from "$lib/components/statusDisplay.svelte";
     import PoiDialog from "$lib/components/poiDialog.svelte";
     import AudioVolumesDialog from "$lib/components/audioVolumesDialog.svelte";
+    import StoryDialog from "$lib/components/storyDialog.svelte";
 
     export let data: PageData;
     const { mapName, gameState: gameStateObject } = data;
@@ -23,12 +24,14 @@
         playerPosition,
         trackingPOI,
         pois,
+        currentStory,
     } = gameStateObject;
 
     let liveRegion: HTMLElement;
     let lastAnnouncedZone = "";
     let poiDialogOpen = false;
     let volumeDialogOpen = false;
+    let storyDialogOpen = false;
     let musicVolume = 50;
     let ambienceVolume = 85;
     let isLoading = true;
@@ -140,6 +143,12 @@
         volumeDialogOpen = true;
     };
 
+    const handleOpenStoryDialog = () => {
+        if ($currentStory) {
+            storyDialogOpen = true;
+        }
+    };
+
     // To update ambience volumes when sliders change
     $: if (musicVolume !== undefined || ambienceVolume !== undefined) {
         updateCurrentAmbienceVolumes();
@@ -162,7 +171,13 @@
     };
 
     const handleKeyDown = (e: KeyboardEvent) => {
-        if (poiDialogOpen || volumeDialogOpen || e.altKey || e.metaKey) {
+        if (
+            poiDialogOpen ||
+            volumeDialogOpen ||
+            storyDialogOpen ||
+            e.altKey ||
+            e.metaKey
+        ) {
             return;
         }
 
@@ -183,6 +198,9 @@
             } else if (key === "y") {
                 e.preventDefault();
                 handleAnnounceDirection();
+            } else if (key === "e" && $currentStory) {
+                e.preventDefault();
+                handleOpenStoryDialog();
             } else if (key === "v" && e.shiftKey) {
                 e.preventDefault();
                 handleOpenVolumeDialog();
@@ -204,7 +222,7 @@
 
     const handleKeyUp = (e: KeyboardEvent) => {
         if (movementKeyMap[e.key]) {
-            if (!poiDialogOpen && !volumeDialogOpen) {
+            if (!poiDialogOpen && !volumeDialogOpen && !storyDialogOpen) {
                 e.preventDefault();
             }
             gameStateObject.stopMovement(movementKeyMap[e.key]);
@@ -216,6 +234,15 @@
         if (zoneText !== lastAnnouncedZone) {
             speak(zoneText, false);
             lastAnnouncedZone = zoneText;
+        }
+    });
+
+    currentStory.subscribe((story) => {
+        if (story) {
+            // Wrap in setTimeout to ensure it runs after the DOM update, and to avoid interupting any ongoing speech
+            setTimeout(() => {
+                speak("Extra content available", false);
+            }, 30);
         }
     });
 
@@ -305,6 +332,18 @@
                 on:openVolumeDialog={handleOpenVolumeDialog}
             />
 
+            {#if $currentStory}
+                <div class="text-center my-3">
+                    <button
+                        type="button"
+                        class="btn btn-info"
+                        on:click={handleOpenStoryDialog}
+                    >
+                        Read more...
+                    </button>
+                </div>
+            {/if}
+
             <StatusDisplay
                 zoneText={$currentZoneText}
                 playerPosition={$playerPosition}
@@ -320,3 +359,5 @@
     bind:musicVolume
     bind:ambienceVolume
 />
+
+<StoryDialog bind:open={storyDialogOpen} story={$currentStory} />
